@@ -160,13 +160,13 @@ def _fast_feed(screen, data, pending=""):
 PROMPT = "\x1b[38;2;0;255;65mroot@dsh\x1b[0m \x1b[38;2;0;170;47m➜\x1b[0m \x1b[38;2;0;255;65m"
 PROMPT_END = "\x1b[0m \x1b[?25h"
 
-# 首屏 ASCII 大 logo（方块字，宽 ~30、高 5）
-KSH_LOGO = [
-    "   ██   ██   ██    ██  ██   ██ ",
-    "  █  █ █  █ █  █  ███ ███  ███ ",
-    "  ███  ███  ███    ██  ██   ██ ",
-    "  █  █   █  █  █   ██  ██   ██ ",
-    "  █  █ ██   █  █  ███  ██  ███ ",
+# 首屏 ASCII 大 logo（方块字，宽 ~52、高 5）—— BL4CK://SHELL
+BL4CK_LOGO = [
+    "██  █   ██  ███ █ █       █   █ ███ █ █ ███ █   █   ",
+    "█ █ █   █ █ █   ██  █    █   █  █   █ █ █   █   █   ",
+    "██  █   ███ █   ██      █   █   ██  ███ ██  █   █   ",
+    "█ █ █     █ █   █ █ █   █   █     █ █ █ █   █   █   ",
+    "██  ███   █ ███ █ █     █   █   ███ █ █ ███ ███ ███ ",
 ]
 
 # matrix 特效字符池（纯装饰，无木马特征）
@@ -609,7 +609,7 @@ class TerminalWidget(QWidget):
 
     # ---------- 渲染 ----------
     def _banner(self):
-        """首屏：neofetch 风格 —— ASCII 大 logo + 真机信息块，填满终端上半屏。"""
+        """首屏：neofetch/Kali 风格 —— ASCII 大 logo + 真机信息块，填满终端上半屏。"""
         G = _esc(GREEN)
         D = _esc(GREEN_DIM)
         A = _esc(AMBER)
@@ -618,34 +618,75 @@ class TerminalWidget(QWidget):
         try:
             import platform
             import psutil
+            import socket
             cpu = (platform.processor() or platform.machine() or "unknown").strip()
             cores = os.cpu_count() or 0
             vm = psutil.virtual_memory()
+            sw = psutil.swap_memory()
             up = int(time.time() - psutil.boot_time())
             d, r = divmod(up, 86400)
             h, r = divmod(r, 3600)
             m = r // 60
+            # 当前盘根（cwd 所在盘）磁盘用量
+            root = os.path.splitdrive(self.cwd)[0] + os.sep
+            try:
+                du = psutil.disk_usage(root)
+                disk = f"{du.total / 1024 ** 3:.0f}G  ({du.percent:.0f}% used)"
+            except OSError:
+                disk = "n/a"
+            # 本机出口 IP（UDP 不发包，仅取路由地址）
+            ip = "127.0.0.1"
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+            except OSError:
+                pass
+            # 屏幕分辨率
+            res = "n/a"
+            try:
+                from PyQt6.QtWidgets import QApplication
+                g = QApplication.primaryScreen().availableGeometry()
+                res = f"{g.width()}x{g.height()}"
+            except Exception:
+                pass
             rows = [
                 ("OS", f"{platform.system()} {platform.release()}"),
                 ("KERNEL", platform.version()),
                 ("CPU", cpu[:34]),
                 ("CORES", str(cores)),
-                ("MEMORY", f"{vm.total / 1024 ** 3:.1f} GB  ({vm.percent:.0f}% used)"),
+                ("MEMORY", f"{vm.total / 1024 ** 3:.1f}G ({vm.percent:.0f}% used)"),
+                ("SWAP", f"{sw.total / 1024 ** 3:.1f}G"),
+                ("DISK", disk),
                 ("UPTIME", f"{d}d {h:02d}h {m:02d}m"),
+                ("PROCESSES", str(len(psutil.pids()))),
+                ("IP", ip),
+                ("RESOLUTION", res),
+                ("WINDOWS", (platform.win32_edition() or platform.win32_ver()[0])[:24]),
+                ("SHELL", "BL4CK://SHELL"),
                 ("USER", "root@dsh"),
                 ("CWD", self.cwd.replace(os.path.expanduser("~"), "~")),
             ]
+            try:
+                b = psutil.sensors_battery()
+                if b is not None:
+                    rows.insert(9, ("BATTERY", f"{b.percent}%"))
+            except Exception:
+                pass
         except Exception:
             pass
 
         t = time.strftime("%H:%M:%S")
         self._emit(f"{G}  BL4CK://SHELL v1.0   NEON CONSOLE{Z}  {D}[{t}]{Z}\r\n")
         self._emit(f"{D}  " + "=" * 46 + f"{Z}\r\n")
-        for line in KSH_LOGO:
+        for line in BL4CK_LOGO:
             self._emit(f"{G}  {line}{Z}\r\n")
         self._emit(f"{D}  " + "-" * 46 + f"{Z}\r\n")
         for k, v in rows:
-            self._emit(f"{D}  {k:<7}{Z} : {G}{v}{Z}\r\n")
+            self._emit(f"{D}  {k:<10}{Z} : {G}{v}{Z}\r\n")
+        # neofetch 风格 16 色板条（256 色背景块）
+        self._emit("  " + "".join(f"\x1b[48;5;{i}m  " for i in range(16)) + f"{Z}\r\n")
         self._emit(f"{D}  " + "=" * 46 + f"{Z}\r\n")
         self._emit(f"  type {G}help{Z} for commands  {A}*{Z}  "
                    f"tab completes paths  {A}*{Z}  up/down recalls history\r\n\r\n")
