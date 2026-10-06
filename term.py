@@ -612,10 +612,9 @@ class TerminalWidget(QWidget):
     def _banner(self):
         """首屏：neofetch/Kali 风格 —— 加粗 ASCII 大 logo + 真机信息块 + 16 色板条。
 
-        信息项（OS/Host/Kernel/Uptime/Packages/Shell/Resolution/DE/WM/Theme/
-        Terminal/CPU/Memory）模仿 Kali 的 neofetch 排版；数据全部来自快速来源
-        （platform / psutil / winreg 注册表读 CPU 型号与已装程序数 / Qt 屏幕），
-        不调 wmic（慢 1-2 秒）。
+        信息项（OS/Host/Kernel/Uptime/Load Avg/Packages/Shell/Resolution/DE/WM/
+        Theme/Terminal/CPU/Memory…）模仿 Kali 的 neofetch 排版；真机数据统一走
+        sysinfo.py（platform / psutil / Windows 注册表，不调 wmic）。
         """
         G = _esc(GREEN)
         D = _esc(GREEN_DIM)
@@ -624,79 +623,22 @@ class TerminalWidget(QWidget):
         fields = []
         try:
             import platform
-            import socket
             import psutil
             import theme as _theme
+            import sysinfo
 
-            def _rk(path, name=""):
-                """读 HKLM 注册表字符串（失败返回空串）。"""
-                try:
-                    import winreg
-                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as k:
-                        return str(winreg.QueryValueEx(k, name)[0])
-                except Exception:
-                    return ""
-
-            cpu_key = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
-            cpu = (_rk(cpu_key, "ProcessorNameString").strip()
-                   or platform.processor() or platform.machine() or "unknown")
-            try:
-                mhz = int(_rk(cpu_key, "~MHz")) or 0
-            except (TypeError, ValueError):
-                mhz = 0
             cores = os.cpu_count() or 0
-            vendor = _rk(r"HARDWARE\DESCRIPTION\System\BIOS", "SystemManufacturer").strip()
-            model = _rk(r"HARDWARE\DESCRIPTION\System\BIOS", "SystemProductName").strip()
-            host = f"{vendor} {model}".strip() or platform.machine() or "unknown"
-
-            def _npkg():
-                """已安装程序数（三处 Uninstall 注册表项计数，~20ms）。"""
-                try:
-                    import winreg
-                except ImportError:
-                    return 0
-                subs = ((winreg.HKEY_LOCAL_MACHINE,
-                         r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-                        (winreg.HKEY_LOCAL_MACHINE,
-                         r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
-                        (winreg.HKEY_CURRENT_USER,
-                         r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"))
-                n = 0
-                for hive, sub in subs:
-                    try:
-                        with winreg.OpenKey(hive, sub) as k:
-                            i = 0
-                            while True:
-                                try:
-                                    winreg.EnumKey(k, i)
-                                    n += 1
-                                    i += 1
-                                except OSError:
-                                    break
-                    except OSError:
-                        pass
-                return n
-
-            vm = psutil.virtual_memory()
-            sw = psutil.swap_memory()
-            up = int(time.time() - psutil.boot_time())
-            d, r = divmod(up, 86400)
-            h, r = divmod(r, 3600)
-            m = r // 60
-            root = os.path.splitdrive(self.cwd)[0] + os.sep
+            cpu_line = sysinfo.cpu_name()[:38]
+            mhz = sysinfo.cpu_mhz()
+            if mhz:
+                cpu_line += f" ({cores}) @ {mhz / 1000:.2f}GHz"
+            elif cores:
+                cpu_line += f" ({cores})"
             try:
-                du = psutil.disk_usage(root)
+                du = psutil.disk_usage(os.path.splitdrive(self.cwd)[0] + os.sep)
                 disk = f"{du.total / 1024 ** 3:.0f}G ({du.percent:.0f}% used)"
             except OSError:
                 disk = "n/a"
-            ip = "127.0.0.1"
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.connect(("8.8.8.8", 80))
-                ip = s.getsockname()[0]
-                s.close()
-            except OSError:
-                pass
             res = "n/a"
             try:
                 from PyQt6.QtWidgets import QApplication
@@ -704,36 +646,16 @@ class TerminalWidget(QWidget):
                 res = f"{g.width()}x{g.height()}"
             except Exception:
                 pass
-            try:
-                edition = platform.win32_edition() or ""
-            except Exception:
-                edition = ""
-            # Windows 版本友好化：Win11 判定用 build ≥ 22000；版名映射缩写
-            try:
-                _build = int(platform.version().split(".")[-1])
-            except ValueError:
-                _build = 0
-            _ed_map = {
-                "Core": "Home", "CoreCountrySpecific": "Home (CN)",
-                "CoreSingleLanguage": "Home (SL)", "Professional": "Pro",
-                "ProfessionalN": "Pro N", "Enterprise": "Enterprise",
-                "Education": "Education", "ProfessionalEducation": "Pro Education",
-            }
-            _win = "Windows 11" if _build >= 22000 else f"Windows {platform.release()}"
-            os_name = " ".join(x for x in (_win, _ed_map.get(edition, edition),
-                                           platform.machine()) if x)
+            vm = psutil.virtual_memory()
+            sw = psutil.swap_memory()
             mib = 1024 ** 2
-            cpu_line = cpu[:38]
-            if mhz:
-                cpu_line += f" ({cores}) @ {mhz / 1000:.2f}GHz"
-            elif cores:
-                cpu_line += f" ({cores})"
             fields = [
-                ("OS", os_name),
-                ("Host", host[:40]),
-                ("Kernel", f"{platform.version()}-{platform.machine().lower()}"),
-                ("Uptime", f"{d}d {h}h {m}m"),
-                ("Packages", f"{_npkg()} (installed)"),
+                ("OS", sysinfo.os_name()),
+                ("Host", sysinfo.host()[:40]),
+                ("Kernel", sysinfo.kernel()),
+                ("Uptime", sysinfo.uptime_str()),
+                ("Load Avg", sysinfo.load_avg()),
+                ("Packages", f"{sysinfo.package_count()} (installed)"),
                 ("Shell", "BL4CK://SHELL 1.0"),
                 ("Resolution", res),
                 ("DE", "Windows Explorer"),
@@ -744,7 +666,7 @@ class TerminalWidget(QWidget):
                 ("Memory", f"{vm.used // mib}MiB / {vm.total // mib}MiB"),
                 ("Swap", f"{sw.used // mib}MiB / {sw.total // mib}MiB"),
                 ("Disk", disk),
-                ("IP", ip),
+                ("IP", sysinfo.local_ip()),
                 ("Processes", str(len(psutil.pids()))),
             ]
             try:

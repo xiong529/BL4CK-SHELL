@@ -9,13 +9,17 @@ import psutil
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QGridLayout, QHBoxLayout, QHeaderView, QLabel, QTableWidget,
+    QGridLayout, QHBoxLayout, QHeaderView, QLabel, QSizePolicy, QTableWidget,
     QTableWidgetItem, QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QWidget, QSplitter, QFrame,
 )
 
 from theme import (GREEN, GREEN_DIM, GREEN_DARK, AMBER, RED, BLACK, mono,
                    GREEN_FAINT, hub)
+
+# SYSTEM INFO 条形图用的实心/空心方块（模块级，避免在 f-string 表达式里写反斜杠转义）
+_BLOCK = "█"
+_SHADE = "░"
 
 
 class PanelTitle(QLabel):
@@ -45,65 +49,148 @@ class Val(QLabel):
 
 
 class SysInfoPanel(QWidget):
+    """SYSTEM INFO：Kali neofetch 风格真机信息。
+
+    静态项（OS/Kernel/Host）只读一次；动态项（Uptime/Load Avg/Procs/IP 与
+    CPU/MEM/SWAP/DISK 百分比 + 条形图）每秒刷新。真机数据统一来自 sysinfo.py
+    （platform / psutil / 注册表，不调 wmic —— wmic 要 1-2 秒）。
+    """
+
+    TEXT_ROWS = ("OS", "Kernel", "Host", "Uptime", "Load Avg", "Procs", "IP")
+    BAR_ROWS = ("CPU", "MEM", "SWAP", "DISK")
+    KEY_W = 56          # 左侧键名列宽（mono(8) 下 8 字符 ≈ 48px）
+    BAR_CELLS = 18      # 条形格数（18×6px = 108px，正好塞进 230px 侧栏）
+
     def __init__(self):
         super().__init__()
-        self.setMinimumHeight(150)
+        self.setMinimumHeight(186)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(6, 4, 6, 4)
-        lay.addWidget(PanelTitle("SYSTEM INFO"))
+        lay.setSpacing(1)
+        lay.addWidget(PanelTitle("{ SYSTEM INFO }"))
 
-        self.cpu = Val()
-        self.mem = Val(96, 26)
-        self.up = Val(96, 26)
+        self._root = os.path.splitdrive(os.path.expanduser("~"))[0] + os.sep
+        self._static = {"OS": "?", "Kernel": "?", "Host": "?"}
+        try:
+            import sysinfo
+            self._static = {"OS": sysinfo.os_name(), "Kernel": sysinfo.kernel(),
+                            "Host": sysinfo.host()}
+        except Exception:
+            pass
 
-        self.cpu_bar = QLabel()
-        self.mem_bar = QLabel()
-        self.cpu_bar.setFixedHeight(10)
-        self.mem_bar.setFixedHeight(10)
-
+        self.keys = {}
+        self.vals = {}
+        self.bars = {}
+        self._raw = {}
         g = QGridLayout()
-        g.addWidget(QLabel("CPU"), 0, 0)
-        g.addWidget(self.cpu, 0, 1)
-        g.addWidget(self.cpu_bar, 1, 0, 1, 2)
-        g.addWidget(QLabel("MEM"), 2, 0)
-        g.addWidget(self.mem, 2, 1)
-        g.addWidget(self.mem_bar, 3, 0, 1, 2)
-        g.addWidget(QLabel("UP"), 4, 0)
-        g.addWidget(self.up, 4, 1)
+        g.setContentsMargins(0, 2, 0, 0)
+        g.setHorizontalSpacing(4)
+        g.setVerticalSpacing(1)
+        g.setColumnStretch(2, 1)
+
+        r = 0
+        for k in self.TEXT_ROWS:
+            kl = QLabel(k)
+            kl.setFont(mono(8))
+            kl.setFixedWidth(self.KEY_W)
+            v = QLabel("...")
+            v.setFont(mono(8))
+            # Ignored：值列随布局伸缩，绝不用文本宽度去撑宽侧栏
+            v.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            g.addWidget(kl, r, 0)
+            g.addWidget(v, r, 1, 1, 2)
+            self.keys[k], self.vals[k] = kl, v
+            r += 1
+        for k in self.BAR_ROWS:
+            kl = QLabel(k)
+            kl.setFont(mono(8))
+            kl.setFixedWidth(self.KEY_W)
+            pct = QLabel("...")
+            pct.setFont(mono(8))
+            pct.setFixedWidth(34)
+            bar = QLabel()
+            bar.setFont(mono(8))
+            g.addWidget(kl, r, 0)
+            g.addWidget(pct, r, 1)
+            g.addWidget(bar, r, 2)
+            self.keys[k], self.vals[k], self.bars[k] = kl, pct, bar
+            r += 1
         lay.addLayout(g)
+        lay.addStretch(1)
+
+        self.retint()
+        hub.changed.connect(lambda _n: self.retint())
 
         self.t = QTimer(self)
         self.t.timeout.connect(self._refresh)
         self.t.start(1000)
         self._refresh()
 
+    def retint(self):
+        for lab in self.keys.values():
+            lab.setStyleSheet(f"color: {GREEN_DIM.name()};")
+        for lab in self.vals.values():
+            lab.setStyleSheet(f"color: {GREEN.name()};")
+
+    def set_cwd(self, path):
+        """跟随终端 cwd：DISK 行显示终端所在盘。"""
+        drv = os.path.splitdrive(path or "")[0]
+        if drv:
+            self._root = drv + os.sep
+
     def _refresh(self):
         try:
             cpu = psutil.cpu_percent(None)
             mem = psutil.virtual_memory()
+            sw = psutil.swap_memory()
+            procs = len(psutil.pids())
         except Exception:
             return
-        self.cpu.setText(f"{cpu:5.1f}%")
-        self.cpu_bar.setText(self._bar(cpu))
-        self.mem.setText(f"{mem.percent:4.1f}%")
-        self.mem_bar.setText(self._bar(mem.percent))
         try:
-            secs = int(time.time() - psutil.boot_time())
+            disk = psutil.disk_usage(self._root).percent
+        except OSError:
+            disk = 0.0
+        try:
+            import sysinfo
+            up = sysinfo.uptime_str()
+            load = sysinfo.load_avg()
+            ip = sysinfo.local_ip()
         except Exception:
-            secs = 0
-        self.up.setText(self._hm(secs))
+            up = load = ip = "n/a"
+        self._raw.update(OS=self._static["OS"], Kernel=self._static["Kernel"],
+                         Host=self._static["Host"], Uptime=up,
+                         **{"Load Avg": load}, Procs=str(procs), IP=ip)
+        self._elide_all()
+        for k, pct in (("CPU", cpu), ("MEM", mem.percent),
+                       ("SWAP", sw.percent), ("DISK", disk)):
+            self.vals[k].setText(f"{pct:.0f}%")
+            self.bars[k].setText(self._bar(pct))
 
-    def _hm(self, s):
-        d, s = divmod(s, 86400)
-        h, s = divmod(s, 3600)
-        return f"{d}d {h:02d}h {s // 60:02d}m"
+    def resizeEvent(self, e):
+        """侧栏被拖动改宽时必须重算省略号，否则值会停在旧宽度上。"""
+        self._elide_all()
+        super().resizeEvent(e)
+
+    def _elide_all(self):
+        for k in self.TEXT_ROWS:
+            self._text(k, self._raw.get(k, "..."))
+
+    def _text(self, key, text):
+        """长文本按可用宽度省略号截断（侧栏窄，OS/Host 一定会超），全量进 tooltip。"""
+        lab = self.vals[key]
+        text = str(text)
+        self._raw[key] = text
+        avail = max(60, self.width() - self.KEY_W - 24)
+        lab.setText(lab.fontMetrics().elidedText(
+            text, Qt.TextElideMode.ElideRight, avail))
+        lab.setToolTip(text)
 
     def _bar(self, pct):
-        n = int(pct / 100 * 24)
-        filled = "\u2588" * n
-        empty = "\u2591" * (24 - n)
-        color = GREEN.name()
-        return f'<font color="{color}">{filled}</font><font color="#0a2a12">{empty}</font>'
+        pct = max(0.0, min(100.0, float(pct)))
+        n = int(pct / 100 * self.BAR_CELLS)
+        color = (GREEN if pct < 70 else AMBER if pct < 90 else RED).name()
+        return (f'<font color="{color}">{_BLOCK * n}</font>'
+                f'<font color="{GREEN_FAINT.name()}">{_SHADE * (self.BAR_CELLS - n)}</font>')
 
 
 class FileTreePanel(QWidget):
@@ -477,7 +564,9 @@ class LeftPanel(QWidget):
         lay.addWidget(split)
 
         self.files.cwd_changed.connect(self.cwd_changed.emit)
+        self.files.cwd_changed.connect(self.sys.set_cwd)
         self.files.file_open.connect(self.file_open.emit)
+        self.sys.set_cwd(self.files.cwd)
 
     def retint(self):
         self.box.setStyleSheet(f"background-color: {BLACK.name()};")
