@@ -229,6 +229,8 @@ class WorldMapWidget(QWidget):
     def __init__(self, height=240, parent=None):
         super().__init__(parent)
         self.setFixedHeight(height)
+        self._bg_fill = QColor(BLACK)   # 背景填充；boot 覆盖层可改透明露出下层代码雨
+        self._sphere_fill = None        # 球体内不透明填充（None=不画）；boot 用它挡雨
         self.mask = land_mask()
         self.city_pts = []          # [(x_norm, y_norm, name, country, isp, lon, lat)]
         for name, lon, lat, country, isp in CITIES:
@@ -432,7 +434,13 @@ class WorldMapWidget(QWidget):
         p = QPainter(self)
         # 反锯齿在软光栅下是主要开销（272×250 上几千个 1px 圆点）；1-2px
         # 的点/线关掉 AA 视觉几乎无差，但 paint 从 ~35ms 降到个位数 ms。
-        p.fillRect(0, 0, w, h, QColor(BLACK))
+        p.fillRect(0, 0, w, h, self._bg_fill)
+
+        # 球体不透明底：只填球内，球外保持透明（boot 背景雨从球外透出）
+        if self._sphere_fill is not None:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(self._sphere_fill)
+            p.drawEllipse(QPointF(cx, cy), R, R)
 
         # 球体体积感：径向渐变
         grad = QRadialGradient(cx, cy, R)
