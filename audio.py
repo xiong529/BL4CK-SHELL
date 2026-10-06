@@ -19,6 +19,8 @@ import os
 from PyQt6.QtCore import QUrl
 from PyQt6.QtMultimedia import QSoundEffect
 
+import sfxgen
+
 _DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "audio")
 
 _ENABLED = True       # sound on/off 总开关
@@ -40,7 +42,10 @@ def _fx(name: str):
     if fx is None:
         path = os.path.join(_DIR, name + ".wav")
         if not os.path.exists(path):
-            return None
+            # 合成型音效（boot_power/boot_beep）缺失时惰性生成
+            if not sfxgen.ensure(name + ".wav"):
+                return None
+            path = os.path.join(_DIR, name + ".wav")
         try:
             fx = QSoundEffect()
             fx.setSource(QUrl.fromLocalFile(path))
