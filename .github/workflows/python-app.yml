@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  regression:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+      - name: 编译检查
+        run: python -m py_compile main.py boot.py audio.py sfxgen.py worldmap.py term.py editor.py panels.py sidebar.py monitor.py theme.py
+      - name: 离屏回归测试（20 用例）
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python _regress.py
