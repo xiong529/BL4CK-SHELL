@@ -9,6 +9,8 @@
 >
 > **制作与维护**：[xiong529](https://github.com/xiong529) · 纯 Python + PyQt6，开源分享，欢迎 Star ⭐
 
+![开机动画 → 进入程序界面](docs/boot_demo.gif)
+
 ---
 
 ## 快速开始
