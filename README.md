@@ -1,4 +1,4 @@
-# KSH//NT — Secure Console
+# BL4CK://SHELL
 
 一个跑在 Windows 上的「黑客风」终端 + 代码编辑器，纯 Python + PyQt6 构建。
 
@@ -12,11 +12,7 @@
 ## 快速开始
 
 1. **装 Python 3.9+**（[python.org](https://www.python.org/downloads/) 下载安装，勾选 *Add to PATH*）
-2. **打开终端**（Win+R 输入 `cmd`，回车），进入项目目录（换成你解压/克隆到的位置）：
-
-```powershell
-cd D:\你的目录\Terminal
-```
+2. **打开终端**（Win+R 输入 `cmd`，回车），`cd` 进入解压 / 克隆后的项目文件夹
 
 3. **安装依赖**（首次运行需要）：
 

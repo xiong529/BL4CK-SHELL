@@ -1,4 +1,4 @@
-"""KSH//NT —— 类 Linux 终端，Windows 后端。
+"""BL4CK://SHELL —— 类 Linux 终端，Windows 后端。
 
 启动流程：BootScreen 作为**主窗口内部的覆盖层**播放自检流，播完自动移除、
 焦点交给终端。不再另开顶层全屏窗口——避开全屏状态切换造成的闪烁、
@@ -58,7 +58,7 @@ class TitleBar(QWidget):
         lay.setContentsMargins(8, 0, 4, 0)
         lay.setSpacing(2)
 
-        title = QLabel("KSH//NT — SECURE CONSOLE")
+        title = QLabel("BL4CK://SHELL — NEON CONSOLE")
         title.setStyleSheet(
             f"color: {GREEN.name()}; font-weight: bold; font-size: 12px;"
             f" background: transparent;")
@@ -213,7 +213,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("KSH//NT - SECURE CONSOLE")
+        self.setWindowTitle("BL4CK://SHELL - NEON CONSOLE")
         # 去系统白边框标题栏，改自绘深色 TitleBar
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.resize(1280, 800)
@@ -291,7 +291,7 @@ class MainWindow(QMainWindow):
 
         # ------ 底部跑马灯 ------
         self.marquee = QLabel(
-            "   HACK THE PLANET   //   STAY ANONYMOUS   //   KSH//NT v0.1   ")
+            "   HACK THE PLANET   //   STAY ANONYMOUS   //   BL4CK://SHELL v1.0   ")
         self.marquee.setStyleSheet(
             f"background-color: {BLACK.name()}; color: {GREEN.name()};"
             f"border-top: 1px solid {GREEN_DIM.name()}; padding: 3px;"
@@ -490,7 +490,7 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("KSH//NT")
+    app.setApplicationName("BL4CK://SHELL")
     app.setStyleSheet(APP_STYLE)
     app.setFont(mono())
 

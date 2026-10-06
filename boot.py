@@ -26,7 +26,7 @@ ASCII_LOGO = [
 ]
 
 STATIC_LINES = [
-    " KSH//NT v0.1   SECURE CONSOLE",
+    " BL4CK://SHELL v1.0   NEON CONSOLE",
     " [ OK ]  BIOS     : AMI x64",
     " [ OK ]  POST     : passed",
     " [ OK ]  BOOT DEV : C:\\",

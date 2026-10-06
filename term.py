@@ -639,7 +639,7 @@ class TerminalWidget(QWidget):
             pass
 
         t = time.strftime("%H:%M:%S")
-        self._emit(f"{G}  KSH//NT 0.1   SECURE CONSOLE{Z}  {D}[{t}]{Z}\r\n")
+        self._emit(f"{G}  BL4CK://SHELL v1.0   NEON CONSOLE{Z}  {D}[{t}]{Z}\r\n")
         self._emit(f"{D}  " + "=" * 46 + f"{Z}\r\n")
         for line in KSH_LOGO:
             self._emit(f"{G}  {line}{Z}\r\n")
@@ -1717,7 +1717,7 @@ class TerminalWidget(QWidget):
         def row(prefix, names):
             return G + ("%-10s" % prefix) + Z + "  " + "  ".join(names) + "\r\n"
         return (
-            "\r\n" + G + "  KSH//NT — SECURE CONSOLE HELP\x1b[0m\r\n"
+            "\r\n" + G + "  BL4CK://SHELL — NEON CONSOLE HELP\x1b[0m\r\n"
             "\r\n"
             + row("file", ["cd", "dir/ls", "pwd", "cat/type", "tree", "echo"])
             + row("system", ["whoami", "hostname", "date", "uname", "df", "free", "ver"])
