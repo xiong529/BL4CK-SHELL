@@ -6,6 +6,8 @@
 外观与交互致敬 eDEX-UI，让你在朋友面前 cos Black客，拥有更多炫酷命令与实用功能。
 
 > License: MIT（详见 [LICENSE](LICENSE)）· 仿终端 UI 项目，仅供学习与技术展示，请勿用于任何非法用途。
+>
+> **制作与维护**：[xiong529](https://github.com/xiong529) · 纯 Python + PyQt6，开源分享，欢迎 Star ⭐
 
 ---
 
