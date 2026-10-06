@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 本地日志 / 调试产物（可能含本机绝对路径）
+*.log
+_t_*.py
+_diag_gui.py
+
+# 第三方参考代码（不随项目发布）
+_refs/
+
+# 开发过程截图
+shots/

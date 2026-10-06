@@ -1,0 +1,4 @@
+PyQt6>=6.5
+pyte>=0.8.0
+psutil>=5.9
+wcwidth>=0.2
