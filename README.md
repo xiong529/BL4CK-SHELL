@@ -3,7 +3,7 @@
 一个跑在 Windows 上的「黑客风」终端 + 代码编辑器，纯 Python + PyQt6 构建。
 
 开机自检动画、真实硬件数据、3D 世界地图、命令补全、20+ 主题、事件音效——
-外观与交互致敬 eDEX-UI，让你在朋友面前 cos 黑客，拥有更多炫酷命令与实用功能。
+外观与交互致敬 eDEX-UI，让你在朋友面前 cos Black客，拥有更多炫酷命令与实用功能。
 
 > License: MIT（详见 [LICENSE](LICENSE)）· 仿终端 UI 项目，仅供学习与技术展示，请勿用于任何非法用途。
 
@@ -12,10 +12,10 @@
 ## 快速开始
 
 1. **装 Python 3.9+**（[python.org](https://www.python.org/downloads/) 下载安装，勾选 *Add to PATH*）
-2. **打开终端**（Win+R 输入 `cmd`，回车），进入本项目目录：
+2. **打开终端**（Win+R 输入 `cmd`，回车），进入项目目录（换成你解压/克隆到的位置）：
 
 ```powershell
-cd D:\python\project\Terminal
+cd D:\你的目录\Terminal
 ```
 
 3. **安装依赖**（首次运行需要）：
@@ -58,6 +58,25 @@ while True:
 这是一段无限循环的彩虹滚动条，最能展示「长进程不被卡死、输出实时流式」的能力。
 
 ---
+
+## 炫酷内置命令
+
+在终端里直接输入这些命令，全部内置实现，无需安装任何东西：
+
+| 命令 | 效果 |
+|---|---|
+| `matrix` | **矩阵雨特效**，全屏绿字雨滴，按 `Ctrl+C` 退出 —— 装逼第一神器 |
+| `whereami` | 公网定位：你的真实 IP、国家、城市、经纬度、ISP |
+| `weather` / `weather 北京` | 实时天气：温度、湿度、风速 |
+| `quote` | 随机英文名言一句 |
+| `crypto btc` | 加密货币实时价格（支持 `btc` `eth` `sol` `doge` `ada` `xrp` `bnb` `ltc`） |
+| `theme` / `theme matrix` | 列出 / 切换 20+ 主题，全局重着色 |
+| `sound on` / `sound off` | 音效开关 |
+| `whoami` / `hostname` / `date` / `uname` | 真机信息（用户名/主机名/时间/系统） |
+| `df` / `free` | 磁盘占用 / 内存占用（实时真数据） |
+| `tree` | 目录树（真数据，限制深度防卡） |
+
+**透传规则**：没识别的命令（`ping` `ipconfig` `netstat` `curl` …）直接透传给 Windows cmd 执行；Linux 命令别名（`ls` `clear` `cat` …）自动映射到 Windows 对应命令。
 
 ## 功能一览
 
