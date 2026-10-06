@@ -160,13 +160,14 @@ def _fast_feed(screen, data, pending=""):
 PROMPT = "\x1b[38;2;0;255;65mroot@dsh\x1b[0m \x1b[38;2;0;170;47m➜\x1b[0m \x1b[38;2;0;255;65m"
 PROMPT_END = "\x1b[0m \x1b[?25h"
 
-# 首屏 ASCII 大 logo（方块字，宽 ~52、高 5）—— BL4CK://SHELL
+# 首屏 ASCII 大 logo（加粗方块字，宽 90、高 5）—— BL4CK://SHELL
+# 渲染时逐行 ljust 到 logo_w 再居中，避免各行尾部空格被裁导致歪斜
 BL4CK_LOGO = [
-    "██  █   ██  ███ █ █       █   █ ███ █ █ ███ █   █   ",
-    "█ █ █   █ █ █   ██  █    █   █  █   █ █ █   █   █   ",
-    "██  █   ███ █   ██      █   █   ██  ███ ██  █   █   ",
-    "█ █ █     █ █   █ █ █   █   █     █ █ █ █   █   █   ",
-    "██  ███   █ ███ █ █     █   █   ███ █ █ ███ ███ ███ ",
+    "█████  █      █   █  ██████ █    █            ██     ██ ██████ █    █ ██████ █      █",
+    "█    █ █      █   █  █      █   █    ██      ██     ██  █      █    █ █      █      █",
+    "█████  █      ██████ █      ████            ██     ██   █████  ██████ █████  █      █",
+    "█    █ █          █  █      █   █    ██    ██     ██         █ █    █ █      █      █",
+    "█████  ██████     █  ██████ █    █        ██     ██     ██████ █    █ ██████ ██████ ██████",
 ]
 
 # matrix 特效字符池（纯装饰，无木马特征）
@@ -609,32 +610,85 @@ class TerminalWidget(QWidget):
 
     # ---------- 渲染 ----------
     def _banner(self):
-        """首屏：neofetch/Kali 风格 —— ASCII 大 logo + 真机信息块，填满终端上半屏。"""
+        """首屏：neofetch/Kali 风格 —— 加粗 ASCII 大 logo + 真机信息块 + 16 色板条。
+
+        信息项（OS/Host/Kernel/Uptime/Packages/Shell/Resolution/DE/WM/Theme/
+        Terminal/CPU/Memory）模仿 Kali 的 neofetch 排版；数据全部来自快速来源
+        （platform / psutil / winreg 注册表读 CPU 型号与已装程序数 / Qt 屏幕），
+        不调 wmic（慢 1-2 秒）。
+        """
         G = _esc(GREEN)
         D = _esc(GREEN_DIM)
         A = _esc(AMBER)
         Z = "\x1b[0m"
-        rows = []
+        fields = []
         try:
             import platform
-            import psutil
             import socket
-            cpu = (platform.processor() or platform.machine() or "unknown").strip()
+            import psutil
+            import theme as _theme
+
+            def _rk(path, name=""):
+                """读 HKLM 注册表字符串（失败返回空串）。"""
+                try:
+                    import winreg
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as k:
+                        return str(winreg.QueryValueEx(k, name)[0])
+                except Exception:
+                    return ""
+
+            cpu_key = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+            cpu = (_rk(cpu_key, "ProcessorNameString").strip()
+                   or platform.processor() or platform.machine() or "unknown")
+            try:
+                mhz = int(_rk(cpu_key, "~MHz")) or 0
+            except (TypeError, ValueError):
+                mhz = 0
             cores = os.cpu_count() or 0
+            vendor = _rk(r"HARDWARE\DESCRIPTION\System\BIOS", "SystemManufacturer").strip()
+            model = _rk(r"HARDWARE\DESCRIPTION\System\BIOS", "SystemProductName").strip()
+            host = f"{vendor} {model}".strip() or platform.machine() or "unknown"
+
+            def _npkg():
+                """已安装程序数（三处 Uninstall 注册表项计数，~20ms）。"""
+                try:
+                    import winreg
+                except ImportError:
+                    return 0
+                subs = ((winreg.HKEY_LOCAL_MACHINE,
+                         r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+                        (winreg.HKEY_LOCAL_MACHINE,
+                         r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+                        (winreg.HKEY_CURRENT_USER,
+                         r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"))
+                n = 0
+                for hive, sub in subs:
+                    try:
+                        with winreg.OpenKey(hive, sub) as k:
+                            i = 0
+                            while True:
+                                try:
+                                    winreg.EnumKey(k, i)
+                                    n += 1
+                                    i += 1
+                                except OSError:
+                                    break
+                    except OSError:
+                        pass
+                return n
+
             vm = psutil.virtual_memory()
             sw = psutil.swap_memory()
             up = int(time.time() - psutil.boot_time())
             d, r = divmod(up, 86400)
             h, r = divmod(r, 3600)
             m = r // 60
-            # 当前盘根（cwd 所在盘）磁盘用量
             root = os.path.splitdrive(self.cwd)[0] + os.sep
             try:
                 du = psutil.disk_usage(root)
-                disk = f"{du.total / 1024 ** 3:.0f}G  ({du.percent:.0f}% used)"
+                disk = f"{du.total / 1024 ** 3:.0f}G ({du.percent:.0f}% used)"
             except OSError:
                 disk = "n/a"
-            # 本机出口 IP（UDP 不发包，仅取路由地址）
             ip = "127.0.0.1"
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -643,7 +697,6 @@ class TerminalWidget(QWidget):
                 s.close()
             except OSError:
                 pass
-            # 屏幕分辨率
             res = "n/a"
             try:
                 from PyQt6.QtWidgets import QApplication
@@ -651,43 +704,78 @@ class TerminalWidget(QWidget):
                 res = f"{g.width()}x{g.height()}"
             except Exception:
                 pass
-            rows = [
-                ("OS", f"{platform.system()} {platform.release()}"),
-                ("KERNEL", platform.version()),
-                ("CPU", cpu[:34]),
-                ("CORES", str(cores)),
-                ("MEMORY", f"{vm.total / 1024 ** 3:.1f}G ({vm.percent:.0f}% used)"),
-                ("SWAP", f"{sw.total / 1024 ** 3:.1f}G"),
-                ("DISK", disk),
-                ("UPTIME", f"{d}d {h:02d}h {m:02d}m"),
-                ("PROCESSES", str(len(psutil.pids()))),
+            try:
+                edition = platform.win32_edition() or ""
+            except Exception:
+                edition = ""
+            # Windows 版本友好化：Win11 判定用 build ≥ 22000；版名映射缩写
+            try:
+                _build = int(platform.version().split(".")[-1])
+            except ValueError:
+                _build = 0
+            _ed_map = {
+                "Core": "Home", "CoreCountrySpecific": "Home (CN)",
+                "CoreSingleLanguage": "Home (SL)", "Professional": "Pro",
+                "ProfessionalN": "Pro N", "Enterprise": "Enterprise",
+                "Education": "Education", "ProfessionalEducation": "Pro Education",
+            }
+            _win = "Windows 11" if _build >= 22000 else f"Windows {platform.release()}"
+            os_name = " ".join(x for x in (_win, _ed_map.get(edition, edition),
+                                           platform.machine()) if x)
+            mib = 1024 ** 2
+            cpu_line = cpu[:38]
+            if mhz:
+                cpu_line += f" ({cores}) @ {mhz / 1000:.2f}GHz"
+            elif cores:
+                cpu_line += f" ({cores})"
+            fields = [
+                ("OS", os_name),
+                ("Host", host[:40]),
+                ("Kernel", f"{platform.version()}-{platform.machine().lower()}"),
+                ("Uptime", f"{d}d {h}h {m}m"),
+                ("Packages", f"{_npkg()} (installed)"),
+                ("Shell", "BL4CK://SHELL 1.0"),
+                ("Resolution", res),
+                ("DE", "Windows Explorer"),
+                ("WM", f"DWM {platform.version()}"),
+                ("Theme", str(getattr(_theme, "CURRENT", "matrix"))),
+                ("Terminal", "BL4CK://SHELL"),
+                ("CPU", cpu_line),
+                ("Memory", f"{vm.used // mib}MiB / {vm.total // mib}MiB"),
+                ("Swap", f"{sw.used // mib}MiB / {sw.total // mib}MiB"),
+                ("Disk", disk),
                 ("IP", ip),
-                ("RESOLUTION", res),
-                ("WINDOWS", (platform.win32_edition() or platform.win32_ver()[0])[:24]),
-                ("SHELL", "BL4CK://SHELL"),
-                ("USER", "root@dsh"),
-                ("CWD", self.cwd.replace(os.path.expanduser("~"), "~")),
+                ("Processes", str(len(psutil.pids()))),
             ]
             try:
                 b = psutil.sensors_battery()
                 if b is not None:
-                    rows.insert(9, ("BATTERY", f"{b.percent}%"))
+                    fields.insert(4, ("Battery", f"{b.percent}%"))
             except Exception:
                 pass
         except Exception:
             pass
 
         t = time.strftime("%H:%M:%S")
+        logo_w = max(len(x) for x in BL4CK_LOGO)
+        bar_w = min(max(20, self.COLS - 4), logo_w)
+        left = " " * max(2, (self.COLS - logo_w) // 2)
         self._emit(f"{G}  BL4CK://SHELL v1.0   NEON CONSOLE{Z}  {D}[{t}]{Z}\r\n")
-        self._emit(f"{D}  " + "=" * 46 + f"{Z}\r\n")
+        self._emit(f"{D}  " + "=" * bar_w + f"{Z}\r\n")
         for line in BL4CK_LOGO:
-            self._emit(f"{G}  {line}{Z}\r\n")
-        self._emit(f"{D}  " + "-" * 46 + f"{Z}\r\n")
-        for k, v in rows:
-            self._emit(f"{D}  {k:<10}{Z} : {G}{v}{Z}\r\n")
-        # neofetch 风格 16 色板条（256 色背景块）
-        self._emit("  " + "".join(f"\x1b[48;5;{i}m  " for i in range(16)) + f"{Z}\r\n")
-        self._emit(f"{D}  " + "=" * 46 + f"{Z}\r\n")
+            self._emit(f"{left}{G}{line.ljust(logo_w)}{Z}\r\n")
+        self._emit(f"{D}  " + "-" * bar_w + f"{Z}\r\n")
+        # neofetch 头：user@host + 下划线
+        self._emit(f"{G}  root@dsh{Z}\r\n")
+        self._emit(f"{D}  -------{Z}\r\n")
+        for k, v in fields:
+            self._emit(f"{D}  {k:<11}: {G}{v}{Z}\r\n")
+        # neofetch 16 色板条：▄ 上下拼色（下=lo、上=hi），两行铺满
+        for row in range(2):
+            seg = "".join(f"\x1b[38;5;{i + row * 8}m\x1b[48;5;{(i + row * 8 + 8) % 16}m▄▄▄"
+                          for i in range(8))
+            self._emit(f"  {seg}{Z}\r\n")
+        self._emit(f"{D}  " + "=" * bar_w + f"{Z}\r\n")
         self._emit(f"  type {G}help{Z} for commands  {A}*{Z}  "
                    f"tab completes paths  {A}*{Z}  up/down recalls history\r\n\r\n")
 
