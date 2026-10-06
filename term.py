@@ -618,7 +618,6 @@ class TerminalWidget(QWidget):
         """
         G = _esc(GREEN)
         D = _esc(GREEN_DIM)
-        A = _esc(AMBER)
         Z = "\x1b[0m"
         fields = []
         try:
@@ -692,14 +691,21 @@ class TerminalWidget(QWidget):
         self._emit(f"{D}  -------{Z}\r\n")
         for k, v in fields:
             self._emit(f"{D}  {k:<11}: {G}{v}{Z}\r\n")
-        # neofetch 16 色板条：▄ 上下拼色（下=lo、上=hi），两行铺满
+        # 绿色渐变板条：两行 ▄ 上下拼绿（行 1 下深上亮，行 2 下亮上深）
         for row in range(2):
-            seg = "".join(f"\x1b[38;5;{i + row * 8}m\x1b[48;5;{(i + row * 8 + 8) % 16}m▄▄▄"
-                          for i in range(8))
-            self._emit(f"  {seg}{Z}\r\n")
+            seg = []
+            for i in range(8):
+                lo = 25 + i * 22          # 深绿 25 → 中绿 179
+                hi = 100 + i * 20         # 中绿 100 → 亮绿 240
+                if row == 0:
+                    fg, bg = hi, lo
+                else:
+                    fg, bg = lo, hi
+                seg.append(f"\x1b[38;2;0;{fg};0m\x1b[48;2;0;{bg};0m▄▄▄")
+            self._emit(f"  {''.join(seg)}{Z}\r\n")
         self._emit(f"{D}  " + "=" * bar_w + f"{Z}\r\n")
-        self._emit(f"  type {G}help{Z} for commands  {A}*{Z}  "
-                   f"tab completes paths  {A}*{Z}  up/down recalls history\r\n\r\n")
+        self._emit(f"  type {G}help{Z} for commands  {G}*{Z}  "
+                   f"tab completes paths  {G}*{Z}  up/down recalls history\r\n\r\n")
 
     def _toggle_blink(self):
         self._blink = not self._blink

@@ -186,11 +186,17 @@ class SysInfoPanel(QWidget):
         lab.setToolTip(text)
 
     def _bar(self, pct):
+        """渐变绿占比条：按格位置由暗绿→亮绿，空槽用最暗绿（全屏只有绿）。"""
         pct = max(0.0, min(100.0, float(pct)))
         n = int(pct / 100 * self.BAR_CELLS)
-        color = (GREEN if pct < 70 else AMBER if pct < 90 else RED).name()
-        return (f'<font color="{color}">{_BLOCK * n}</font>'
-                f'<font color="{GREEN_FAINT.name()}">{_SHADE * (self.BAR_CELLS - n)}</font>')
+        filled = []
+        for i in range(n):
+            # 渐变绿：首格 #002800 → 末格 #00ff00（R=B=0，纯绿系）
+            t = i / max(1, n - 1)
+            g = int(0x28 + t * (0xFF - 0x28))
+            filled.append(f'<font color="#00{g:02x}00">{_BLOCK}</font>')
+        return ("".join(filled)
+                + f'<font color="#001e00">{_SHADE * (self.BAR_CELLS - n)}</font>')
 
 
 class FileTreePanel(QWidget):
